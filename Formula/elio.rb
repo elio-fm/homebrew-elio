@@ -2,7 +2,7 @@ class Elio < Formula
   desc "Terminal-native file manager with rich previews and inline images"
   homepage "https://github.com/MiguelRegueiro/elio"
   url "https://github.com/MiguelRegueiro/elio/archive/refs/tags/v1.0.0.tar.gz"
-  sha256 "7d910f53ca390831f14123177fa6c930976de2a4b5320af70ff3ff1b0fbd1f10"
+  sha256 "7283b4da6a65b2d95cf4e0860357ece6e39119489eb9cd93c023d1b2392b3edf"
   license "MIT"
 
   depends_on "rust" => :build
