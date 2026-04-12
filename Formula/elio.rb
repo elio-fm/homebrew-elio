@@ -1,8 +1,8 @@
 class Elio < Formula
   desc "Terminal-native file manager with rich previews and inline images"
   homepage "https://github.com/elio-fm/elio"
-  url "https://github.com/elio-fm/elio/archive/refs/tags/v1.0.0.tar.gz"
-  sha256 "7283b4da6a65b2d95cf4e0860357ece6e39119489eb9cd93c023d1b2392b3edf"
+  url "https://github.com/elio-fm/elio/archive/refs/tags/v1.0.1.tar.gz"
+  sha256 "f0db4d87253ff67ff212e66e06371f97f2c9a5ad7d02b1fc5a9cd3b15b006f75"
   license "MIT"
 
   depends_on "rust" => :build
