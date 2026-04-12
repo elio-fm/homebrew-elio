@@ -1,0 +1,139 @@
+name: brew pr-pull
+
+on:
+  workflow_run:
+    workflows:
+      - brew test-bot
+    types:
+      - completed
+  pull_request_target:
+    types:
+      - labeled
+
+jobs:
+  auto-pr-pull:
+    # Automatic bottle publishing is intentionally limited to trusted release
+    # branches created inside this repository by elio's release workflow.
+    # Other PRs can still use the manual pr-pull label fallback below.
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      startsWith(github.event.workflow_run.head_branch, 'automation/elio-')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      checks: read
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Resolve release PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          pr_number="$(gh pr list \
+            --repo "${REPOSITORY}" \
+            --head "${HEAD_BRANCH}" \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')"
+
+          if [[ -z "${pr_number}" ]]; then
+            echo "No open PR found for ${HEAD_BRANCH}" >&2
+            exit 1
+          fi
+
+          base_ref="$(gh pr view "${pr_number}" \
+            --repo "${REPOSITORY}" \
+            --json baseRefName \
+            --jq '.baseRefName')"
+
+          if [[ "${base_ref}" != "main" ]]; then
+            echo "PR #${pr_number} targets ${base_ref}, expected main" >&2
+            exit 1
+          fi
+
+          mapfile -t changed_files < <(gh pr diff "${pr_number}" \
+            --repo "${REPOSITORY}" \
+            --name-only | sort -u)
+
+          if [[ "${#changed_files[@]}" -ne 1 || "${changed_files[0]}" != "Formula/elio.rb" ]]; then
+            printf 'Unexpected files changed in PR #%s:\n' "${pr_number}" >&2
+            printf '  %s\n' "${changed_files[@]}" >&2
+            exit 1
+          fi
+
+          {
+            echo "number=${pr_number}"
+            echo "head_branch=${HEAD_BRANCH}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@main
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up git
+        uses: Homebrew/actions/git-user-config@main
+
+      - name: Pull bottles
+        env:
+          HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PULL_REQUEST: ${{ steps.pr.outputs.number }}
+        run: brew pr-pull --debug --tap="$GITHUB_REPOSITORY" "$PULL_REQUEST"
+
+      - name: Push commits
+        uses: Homebrew/actions/git-try-push@main
+        with:
+          branch: main
+
+      - name: Delete release branch
+        env:
+          BRANCH: ${{ steps.pr.outputs.head_branch }}
+        shell: bash
+        run: git push --delete origin "$BRANCH" || echo "Branch $BRANCH was already deleted"
+
+  labeled-pr-pull:
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      contains(github.event.pull_request.labels.*.name, 'pr-pull')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      checks: read
+      contents: write
+      issues: read
+      pull-requests: write
+    steps:
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@main
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up git
+        uses: Homebrew/actions/git-user-config@main
+
+      - name: Pull bottles
+        env:
+          HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+        run: brew pr-pull --debug --tap="$GITHUB_REPOSITORY" "$PULL_REQUEST"
+
+      - name: Push commits
+        uses: Homebrew/actions/git-try-push@main
+        with:
+          branch: main
+
+      - name: Delete branch
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        shell: bash
+        run: git push --delete origin "$BRANCH" || echo "Branch $BRANCH was already deleted"
