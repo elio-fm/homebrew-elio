@@ -5,7 +5,6 @@ class Elio < Formula
   sha256 "225fe5fba1a066458c54169196831859af0bd71539978cad9b326e627ca41803"
   license "MIT"
 
-
   depends_on "rust" => :build
 
   def install
