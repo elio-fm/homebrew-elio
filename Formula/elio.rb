@@ -18,6 +18,8 @@ class Elio < Formula
   end
 
   test do
-    assert_predicate bin/"elio", :executable?
+    missing = testpath/"missing-directory"
+    output = shell_output("#{bin}/elio #{missing} 2>&1", 1)
+    assert_match "no such file or directory", output
   end
 end
